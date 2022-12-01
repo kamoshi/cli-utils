@@ -32,12 +32,21 @@ pub fn run_for(dir: &str) -> Result<(), Box<dyn Error>> {
             }
         };
 
-        let out_path = str_dir.join(exif_name).with_extension(&extension.unwrap());
-        if Path::new(out_path.as_path()).exists() {
-            print_error(out_path.as_os_str(), "Already exists, skipping");
+        let extension = extension.unwrap();
+        let mut new_name = str_dir.join(&exif_name).with_extension(extension);
+        if new_name.exists() {
+            let mut num = 0;
+            while new_name.exists() {
+                num += 1;
+                new_name = str_dir
+                    .join(format!("{}_{}", &exif_name, num))
+                    .with_extension(extension);
+            }
         }
 
-        fs::rename(&file_path, &out_path)?;
+        if !new_name.exists() {
+            fs::rename(&file_path, &new_name)?;
+        }
     }
     Ok(())
 }
