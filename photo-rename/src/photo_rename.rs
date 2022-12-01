@@ -1,48 +1,53 @@
 use std::collections::HashSet;
 use std::error::Error;
+use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use exif::{In, Tag};
 
 
 const EXTENSIONS: [&str; 6] = ["jpg", "jpeg", "JPG", "JPEG", "png", "PNG"];
 
 
-pub fn run_for(input: &str, output: &str) -> Result<(), Box<dyn Error>> {
+pub fn run_for(dir: &str) -> Result<(), Box<dyn Error>> {
     let ext_set: HashSet<&str> = HashSet::from(EXTENSIONS);
-    let (str_i, str_o) = prepare_paths(input, output)?;
+    let str_dir = Path::new(dir).canonicalize()?;
 
-    for entry in fs::read_dir(&str_i)? {
+    for entry in fs::read_dir(&str_dir)? {
         let file_path = entry?.path();
         let file_name = file_path.file_name();
         let extension = file_path.extension().and_then(|ext| ext.to_str());
         if !file_path.is_file() || file_name.is_none() || extension.is_none() || !ext_set.contains(extension.unwrap()) {
-            match file_name.unwrap().to_str() {
-                None => println!("Skipping 1 file..."),
-                Some(name) => println!("Skipping {}", name),
-            }
+            print_error(file_name.unwrap(), "Skipping");
             continue
         }
 
-        let out_temp = str_o.join(&file_name.unwrap());
-        let exif_name = extract_exif_name(&file_path).unwrap();
-        let out_name = str_o.join(exif_name).with_extension(&extension.unwrap());
+        let exif_name = match extract_exif_name(&file_path) {
+            Ok(exif) => exif,
+            Err(err) => {
+                print_error(file_name.unwrap(), &err.to_string());
+                continue
+            }
+        };
 
-        fs::copy(&file_path, &out_temp)?;
-        fs::rename(&out_temp, &out_name)?;
+        let out_path = str_dir.join(exif_name).with_extension(&extension.unwrap());
+        if Path::new(out_path.as_path()).exists() {
+            print_error(out_path.as_os_str(), "Already exists, skipping");
+        }
+
+        fs::rename(&file_path, &out_path)?;
     }
     Ok(())
 }
 
 
-fn prepare_paths(input: &str, output: &str) -> Result<(PathBuf, PathBuf), Box<dyn Error>> {
-    let path_i = Path::new(input).canonicalize()?;
-    let path_o = Path::new(output);
-    fs::create_dir_all(&path_o)?;
-    let path_o = path_o.canonicalize()?;
-    Ok((path_i, path_o))
+fn print_error(name: &OsStr, info: &str) {
+    match name.to_str() {
+        None => eprintln!("Unknown file: {}", info),
+        Some(name) => eprintln!("{}: {}", name, info),
+    }
 }
 
 
