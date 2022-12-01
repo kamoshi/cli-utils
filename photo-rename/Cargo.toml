@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 kamadak-exif = "0.5.5"
+clap = { version = "4.0.29", features = ["derive"] }
+
